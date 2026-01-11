@@ -1,3 +1,5 @@
+!!!DISCLAIMER!!! THIS IS NOT IMPLEMENTED!!! DO NOT USE!!!
+
 # Carbon Icon Theme
 
 Carbon icons for [Zed](https://zed.dev/).
