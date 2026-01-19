@@ -1,0 +1,153 @@
+# Example Kubernetes Pod configuration
+# Deploys agent-browser alongside Claude Code in the same pod
+# Both containers share localhost network, allowing Claude Code to connect via CDP
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: claude-code-with-browser
+  labels:
+    app: claude-code-browser
+spec:
+  containers:
+    # agent-browser container - provides headless browser automation
+    - name: agent-browser
+      image: your-registry/agent-browser:latest
+      ports:
+        - containerPort: 9222
+          name: cdp
+          protocol: TCP
+        - containerPort: 9223
+          name: ws-stream
+          protocol: TCP
+      env:
+        - name: CDP_PORT
+          value: "9222"
+        - name: AGENT_BROWSER_STREAM_PORT
+          value: "9223"
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "250m"
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+      # Use /dev/shm for better Chromium performance
+      volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+      livenessProbe:
+        httpGet:
+          path: /json/version
+          port: 9222
+        initialDelaySeconds: 10
+        periodSeconds: 30
+      readinessProbe:
+        httpGet:
+          path: /json/version
+          port: 9222
+        initialDelaySeconds: 5
+        periodSeconds: 10
+
+    # Claude Code container - your AI agent
+    - name: claude-code
+      image: your-registry/claude-code:latest
+      env:
+        # Configure agent-browser to connect to the sidecar
+        # Since containers in the same pod share localhost:
+        - name: AGENT_BROWSER_CDP_PORT
+          value: "9222"
+      # Your Claude Code configuration here
+      # ...
+
+  volumes:
+    # Shared memory for Chromium (prevents crashes)
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: "2Gi"
+
+---
+# Alternative: Deployment with multiple replicas
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-code-browser-deployment
+  labels:
+    app: claude-code-browser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude-code-browser
+  template:
+    metadata:
+      labels:
+        app: claude-code-browser
+    spec:
+      containers:
+        - name: agent-browser
+          image: your-registry/agent-browser:latest
+          ports:
+            - containerPort: 9222
+              name: cdp
+            - containerPort: 9223
+              name: ws-stream
+          env:
+            - name: CDP_PORT
+              value: "9222"
+            - name: AGENT_BROWSER_STREAM_PORT
+              value: "9223"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+          livenessProbe:
+            httpGet:
+              path: /json/version
+              port: 9222
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /json/version
+              port: 9222
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+        - name: claude-code
+          image: your-registry/claude-code:latest
+          env:
+            - name: AGENT_BROWSER_CDP_PORT
+              value: "9222"
+          # Add your Claude Code configuration
+
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "2Gi"
+
+---
+# Service to expose CDP externally (optional - only if needed outside the pod)
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-browser-service
+spec:
+  selector:
+    app: claude-code-browser
+  ports:
+    - name: cdp
+      port: 9222
+      targetPort: 9222
+    - name: ws-stream
+      port: 9223
+      targetPort: 9223
+  type: ClusterIP
