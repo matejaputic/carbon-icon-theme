@@ -35,7 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm
+# Install pnpm and set up PNPM_HOME
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 # Set working directory
@@ -53,8 +55,8 @@ RUN pnpm build
 # Install Playwright Chromium (with deps already installed above)
 RUN pnpm exec playwright install chromium
 
-# Make agent-browser available globally
-RUN pnpm link --global
+# Add app bin directory to PATH so agent-browser CLI is accessible
+ENV PATH="/app/bin:$PATH"
 
 # Create a non-root user for security
 RUN groupadd -r agentbrowser && useradd -r -g agentbrowser -G audio,video agentbrowser \
